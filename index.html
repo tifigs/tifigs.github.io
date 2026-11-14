@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="TiFi-GS separates duration, motion and shape in 4D Gaussians for compact dynamic scenes and segmented transmission. Method, measured results and an early recorded demonstration.">
+  <meta property="og:title" content="TiFi-GS: Time-First Gaussian Splatting for Compact and Streamable Dynamic Scenes">
+  <meta property="og:description" content="A time-first representation for compact dynamic scenes. Explore the method, quantitative results and an early recorded demonstration.">
+  <meta property="og:type" content="website">
+  <title>TiFi-GS: Time-First Gaussian Splatting for Compact and Streamable Dynamic Scenes</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css?v=plot-size-v1">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <nav class="navigation wrap" aria-label="Page sections">
+    <a href="#demonstration">Demonstration</a>
+    <a href="#method">Method</a>
+    <a href="#results">Results</a>
+    <a href="#limitations">Limitations</a>
+  </nav>
+  <main id="main" class="wrap">
+    <header class="hero">
+      <h1><span class="project-name">TiFi-GS:</span> <span class="project-title">Time-First Gaussian Splatting for Compact and Streamable Dynamic Scenes</span></h1>
+      <p class="lead">Separate duration, motion and shape.<br>Compress the scene. Transmit each primitive once.</p>
+      <a class="action" href="#demonstration">Watch demonstration <span aria-hidden="true">&#8595;</span></a>
+    </header>
+
+    <figure class="teaser">
+      <a class="image-link" href="assets/teaser.webp" aria-label="Open the full-resolution teaser figure"><img src="assets/teaser.webp" width="2600" height="1647" fetchpriority="high" alt="Multi-view video input and a rate-distortion plot beside three transmission schemes: per-frame updates, a complete compressed file, and TiFi-GS static data followed by dynamic segments."></a>
+      <figcaption>A static layer arrives first; dynamic primitives follow in one-second segments. The diagram illustrates the transmission organization under a 10-megabit-per-second link. Peak signal-to-noise ratio (PSNR, in decibels or dB) measures reconstruction quality; higher is better. Storage uses kilobytes per frame (KB/frame) or megabytes (MB), with 1 MB equal to one million bytes. <a href="assets/teaser.webp">Open full-resolution figure</a></figcaption>
+    </figure>
+
+    <section class="reading" aria-labelledby="abstract-title">
+      <h2 id="abstract-title">Abstract</h2>
+      <p>Dynamic scenes contain substantial static content, yet a fully dynamic Gaussian representation can retain unnecessary temporal parameters. TiFi-GS reorganizes the four-dimensional Gaussian covariance into separate blocks for duration, motion displacement and spatial shape, while preserving the representational capacity of 4D Gaussians. A learned motion degree encourages suitable primitives to become static; pruning and quantization-aware training further reduce storage.</p>
+      <p>The compressed representation is organized into a static layer and dynamic segments assigned by first-visibility time. Each primitive is transmitted once and rasterized directly after arrival. On the six-scene N3V benchmark, the largest reported tier achieves 32.25 dB with a 4.88 MB model at 315 rendered frames per second. The method targets on-demand delivery of pre-captured sequences trained offline.</p>
+    </section>
+
+    <section id="demonstration" aria-labelledby="demo-title">
+      <div class="reading">
+        <h2 id="demo-title">Recorded demonstrations</h2>
+        <p class="intro">Moving-camera rendering &middot; Early-October models</p>
+        <p>These ten-second recordings render <em>cut_roasted_beef</em> and <em>coffee_martini</em> while the camera moves smoothly left and right in 3D. They use early-October models and illustrate transmission simulations, rather than the final segmented-transmission evaluation below. These are recorded videos, with no interactive 3D viewer.</p>
+      </div>
+      <figure>
+        <video controls playsinline preload="metadata" width="2028" height="508" poster="assets/cut-roasted-beef-sway-en-v1.webp" aria-label="Cut roasted beef: moving-camera transmission simulation" aria-describedby="video-description">
+          <source src="assets/cut-roasted-beef-sway-en-v1.mp4" type="video/mp4">
+          Your browser cannot play this recording. Use the video file link below.
+        </video>
+        <figcaption id="video-description"><strong>Cut roasted beef.</strong> Left: the model rendered from the moving camera. Center: active dynamic primitives, with newly received primitives in red and previously received ones in gray, projected from the same camera. Right: cumulative transfer and newly added primitives. Transfer sizes are estimates that allocate the compressed file size across primitives, not measured network traffic. The video is silent and contains no rendering-speed measurements. <a href="assets/cut-roasted-beef-sway-en-v1.mp4">Open video file (5.04 MB)</a></figcaption>
+      </figure>
+      <figure id="demo-coffee-martini">
+        <video controls playsinline preload="metadata" width="2028" height="508" poster="assets/coffee-martini-sway-en-v1.webp" aria-label="Coffee Martini: moving-camera transmission simulation" aria-describedby="coffee-video-description">
+          <source src="assets/coffee-martini-sway-en-v1.mp4" type="video/mp4">
+          Your browser cannot play this recording. Use the video file link below.
+        </video>
+        <figcaption id="coffee-video-description"><strong>Coffee Martini.</strong> A second dynamic scene rendered along the same left-to-right camera path. The three panels show the rendered scene, active dynamic primitives, and estimated transfer statistics using the same color conventions and byte-accounting method as above. The video is silent and contains no rendering-speed measurements. <a href="assets/coffee-martini-sway-en-v1.mp4">Open video file (4.25 MB)</a></figcaption>
+      </figure>
+    </section>
+
+    <section id="method" aria-labelledby="method-title">
+      <div class="reading">
+        <h2 id="method-title">Method</h2>
+        <p>Time comes first in the covariance factorization. This separates a primitive's temporal extent and motion displacement from its spatial shape, so changing one does not require changing the others.</p>
+      </div>
+      <figure>
+        <a class="image-link" href="assets/overview.webp" aria-label="Open the full-resolution method figure"><img src="assets/overview.webp" width="2600" height="1487" loading="lazy" alt="TiFi-GS pipeline: train time-first Gaussians, learn static conversion, prune and quantize, then transmit a static layer and first-visibility segments."></a>
+        <figcaption>Two-stage optimization followed by static conversion, compression and temporal organization. The learned motion degree is dimensionless and approaches zero for primitives becoming static. Export also checks that their visibility window covers the full sequence. Figure storage amounts are illustrative segment values, not six-scene averages. <a href="assets/overview.webp">Open full-resolution figure</a></figcaption>
+      </figure>
+      <ol class="method-list reading">
+        <li><strong>Represent time explicitly.</strong> Train 4D Gaussians with separate duration, displacement and shape blocks. The displacement expresses motion over one temporal standard deviation.</li>
+        <li><strong>Remove temporal redundancy.</strong> Learn which primitives can become static and which can be pruned, while adapting parameters to quantization. Eligible static primitives store 14 scalar parameters instead of 19.</li>
+        <li><strong>Transmit by first visibility.</strong> Send the static layer and first segment before playback. Later segments contain only dynamic primitives that first become visible in that second; received primitives remain available.</li>
+      </ol>
+    </section>
+
+    <section id="results" aria-labelledby="results-title">
+      <div class="reading">
+        <h2 id="results-title">Quantitative results</h2>
+        <p>Mean over all six N3V scenes, each with 300 frames. The four rate tiers trade reconstruction quality against storage. Rendering speed is measured on the held-out camera at 1352 &times; 1014 pixels with exclusive use of one NVIDIA RTX 3090.</p>
+      </div>
+      <div class="table-block reading">
+        <table>
+          <caption>N3V six-scene reconstruction and storage</caption>
+          <thead><tr><th scope="col">Rate tier</th><th scope="col">PSNR<br><span>(dB)</span></th><th scope="col">Rendering<br><span>(frames/s)</span></th><th scope="col">Model<br><span>(MB)</span></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">TiFi-GS L</th><td>32.25</td><td>315</td><td>4.88</td></tr>
+            <tr><th scope="row">TiFi-GS M</th><td>32.08</td><td>353</td><td>3.22</td></tr>
+            <tr><th scope="row">TiFi-GS S</th><td>31.87</td><td>384</td><td>2.57</td></tr>
+            <tr><th scope="row">TiFi-GS T</th><td>31.68</td><td>384</td><td>2.46</td></tr>
+          </tbody>
+        </table>
+        <p class="note">PSNR: peak signal-to-noise ratio in decibels; higher is better. Rendering: frames rendered per second; higher is faster. Model: compressed single-file size in megabytes, including decoding data; smaller is less storage. All values are positive absolute measurements.</p>
+        <p class="note"><strong>Protocol B.</strong> Each frame is timed ten times; take its median, then the inverse of the mean time over 300 frames. The L tier reports the best of three runs per scene; M, S and T each use one run. Checkpoints are selected on the test view, which can bias quality upward. These are selected-checkpoint results, not independent multi-run means.</p>
+      </div>
+      <figure>
+        <a class="image-link" href="assets/qualitative.webp" aria-label="Open the full-resolution qualitative comparison"><img src="assets/qualitative.webp" width="2600" height="1996" loading="lazy" alt="Ground truth and matching views from Real-Time4DGS, QUEEN, OMG4 and TiFi-GS, with enlarged crops for Coffee Martini, Flame Steak and a MeetRoom headset scene."></a>
+        <figcaption>Selected frames from two N3V scenes and one MeetRoom scene, shown with the original comparison labels and crops. Embedded dB values are per-frame PSNR; storage is in MB or gigabytes (GB). OMG4 on MeetRoom uses a reduced attribute-network learning rate because its official settings diverged. QUEEN has no released MeetRoom model; its N3V size is estimated from reported storage per frame. These frame examples do not replace the six-scene means. <a href="assets/qualitative.webp">Open full-resolution comparison</a></figcaption>
+      </figure>
+    </section>
+
+    <section id="transmission" aria-labelledby="transmission-title">
+      <div class="reading">
+        <h2 id="transmission-title">Transmission after startup</h2>
+        <p>The initial download remains substantial: the static layer plus segment zero accounts for 80.7&ndash;84.2% of the segmented representation. The benefit is the smaller amount of additional data needed during sequential playback.</p>
+      </div>
+      <div class="table-block reading">
+        <table>
+          <caption>Segmented transmission &middot; six-scene N3V means</caption>
+          <thead><tr><th scope="col">Rate tier</th><th scope="col">Startup<br><span>(MB)</span></th><th scope="col">Later data<br><span>(MB/s)</span></th><th scope="col">Total<br><span>(MB)</span></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">TiFi-GS L</th><td>3.972</td><td>0.106</td><td>4.922</td></tr>
+            <tr><th scope="row">TiFi-GS M</th><td>2.701</td><td>0.060</td><td>3.240</td></tr>
+            <tr><th scope="row">TiFi-GS S</th><td>2.173</td><td>0.047</td><td>2.594</td></tr>
+            <tr><th scope="row">TiFi-GS T</th><td>2.087</td><td>0.043</td><td>2.478</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Startup: megabytes required before frame zero. Later data: mean megabytes per second over one-second segments 1&ndash;9, at 30 playback frames per second. Total: sum of all independently compressed segments and the static layer; it is slightly larger than the single-file model. Smaller values mean less data. The same run and checkpoint-selection scope applies as above.</p>
+      </div>
+      <figure>
+        <a class="image-link" href="assets/cumdl.webp?v=readable-v2" aria-label="Open the full-resolution cumulative download plots"><img src="assets/cumdl.webp?v=readable-v2" width="1600" height="2960" loading="lazy" alt="Three vertically stacked plots comparing TiFi-GS M and OMG4 under matched segmentation: cumulative downloads cross at about 2.6 seconds; TiFi-GS uses less total data in four of six scenes; startup advantage depends on bandwidth."></a>
+        <figcaption>Comparison with reproduced OMG4 using the same first-visibility segmentation rule. Top: cumulative megabytes before each playback second. Middle: TiFi-GS minus OMG4 in megabytes; negative means TiFi-GS downloads less. Bottom: startup-wait difference in seconds against constant bandwidth in megabits per second (Mbps); positive means OMG4 starts earlier. This model excludes decoding time and compares different quality levels: 32.08 versus 31.64 dB. <a href="assets/cumdl.webp?v=readable-v2">Open full-resolution plots</a></figcaption>
+      </figure>
+      <p class="reading">At the M tier, TiFi-GS requires more startup data than the reproduced OMG4 model: 2.701 versus 2.377 MB. Subsequent data averages 0.060 versus 0.156 MB/s. Lower sustained traffic therefore does not imply a universal startup advantage.</p>
+    </section>
+
+    <section id="limitations" class="reading" aria-labelledby="limitations-title">
+      <h2 id="limitations-title">Scope and limitations</h2>
+      <ul class="limitations-list">
+        <li><strong>Offline training.</strong> Training uses the entire captured sequence. The method supports on-demand transmission, not live streaming.</li>
+        <li><strong>Sequential access.</strong> Starting at an arbitrary time requires the static layer and all preceding dynamic segments. It is not independent random access.</li>
+        <li><strong>Short-sequence evidence.</strong> The transmission study covers ten-second sequences. Sustained data rates on longer sequences have not been measured.</li>
+        <li><strong>Selected checkpoints.</strong> Test-view checkpoint selection and best-of-three reporting for L limit interpretation. Other tiers are single runs; the table does not quantify their run-to-run uncertainty.</li>
+        <li><strong>Comparison scope.</strong> The matched-segmentation study uses OMG4 based on Real-Time4DGS, a constant-bandwidth model and unequal reconstruction quality. It excludes decoding time and does not establish superiority over all online or compressed representations.</li>
+      </ul>
+    </section>
+    <footer>
+      <p>TiFi-GS &middot; Research project overview</p>
+      <a href="#main">Back to top <span aria-hidden="true">&#8593;</span></a>
+    </footer>
+  </main>
+</body>
+</html>
